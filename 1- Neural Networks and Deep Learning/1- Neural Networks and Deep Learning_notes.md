@@ -333,6 +333,7 @@ We had talked about logistic regression and we saw how this model corresponds to
 If we have one hidden layer added, we will have :
 
 ![lr_layer_graph](https://i.ibb.co/vcg88YW/tempsnip.png)
+
 This will be the new notation of the section : [1] refer to the 1st computation in the first layer and [2] refer to the 2nd computation in the second layer.
 
 Let's talk about representation :
@@ -514,3 +515,115 @@ For b, it turns out that b does not have what's called the symmetry breaking pro
 We choose a small W because of the problem we talked earlier for the tanh() and the sigmoid function : if the weight is too large we will end up at the very start of training with very large values of Z. Which causes the tanh or the sigmoid activation function to be saturated, thus slowing down learning.
 
 Note that constant 0.01 is alright for 1 hidden layer networks, but if the NN is deep, it's better to use another small number.
+
+
+## Deep Neural Networks
+
+### Deep L-layer neural network
+
+- We say that logistic regression is a very "shallow" model, whereas a model with 5 hidden layers for example is a much deeper model.
+
+- So shallow versus depth is a matter of degree.
+
+Notation we're going to use :
+
+- L to denote the number of layers in the network.
+- n^[l] #unit (neurons) in layer l. So n^[0] is the number of input features and n^[L] is the number of neurons in the output layer.
+-  a^[l] denote the activation in layer l and a^[l] = g^[l](z^[l])
+- We use w^[l] to compute z^[l]
+- x= a^[0] and a[l] = y.
+
+### Forward Propagation in a Deep Network
+
+We already said that the back propagation for one layer l and for one input example is :
+
+    z^[l] = W^[l]a^[l-1] + b^[l]
+    a^[l] = g^[l](a^[l])
+
+for m input example , we will have:
+
+    Z^[l] = W^[l]A^[l-1] + B^[l]
+    A^[l] = g^[l](A^[l])
+
+We will have to compute this for each layer l using a for loop because there is no way to do it without it.
+
+## Getting your matrix dimensions right
+
+One important thing to do to have debug a code (or to have a bug free) is to figure out your matrix dimension. Let's how.
+
+first thing is not to be shy by debugging using a pencil and a paper and remember the rules of matrix calculus, using that we can find that :
+
+- w^[l] will always have dimension of (n^[l], n^[l-1]).
+- b^[l] will always be a (n^[l], 1) dimension matrix.
+- dw^[l] have the same dimension as w^[l].
+- db^[l] have the same dimension as b^[l].
+- Dimension of Z^[l], A^[l] , dZ^[l] , and dA^[l] is (n^[l],m) in a vectorize example where m is the number of example.
+
+### Why deep representation ?
+
+Here we are going to discuss why are deep neural networks so effective, and why do they do better than shallow representations?
+
+We can think of the earlier layers of the neural network as detecting simple functions and then composing them together in the later layers of a neural network so that it can learn more and more complex functions., So deep NN makes relations with data from simpler to complex. 
+We saw to examples : 
+
+1. Face recognition application:
+Image ==> Edges ==> Face parts ==> Faces==> desired face
+
+2. Audio recognition application:
+Audio ==> Low level sound features==> Phonemes ==> Words ==> Sentences
+
+Neuroscientist believe that the human brain also starts off detecting simple things like edges then builds those up to detect more complex things like faces. ( analogies between DL and human brain are sometimes dangerous).
+
+The other piece of intuition about why deep networks seem to work well is the circuit theory :
+
+there are functions we can compute with a relatively small but deep neural network (the number of hidden units is relatively small) but if we try to compute the same function with a shallow network, so if there aren't enough hidden layers, then we might require exponentially more hidden units to compute.
+
+Tip : when building a model start with something simple like logistic regression then try something with one or two hidden layers and use that as a hyper parameter.
+Use that as a parameter or hyper parameter that you tune in order to try to find the right depth for your neural network.
+
+### Building blocks of deep neural networks
+
+![forward and backward prop](https://i.ibb.co/7kdQKBK/08.png)
+
+### Forward and Backward Propagation
+
+How to implement the previous steps  of forward and backward prop ?
+
+for forward prop :
+
+    Input A[l-1]
+    Z[l] = W[l]A[l-1] + b[l]
+    A[l] = g[l](Z[l])
+    Output A[l], cache(Z[l])
+
+for backward :
+
+    Input da[l], Caches
+    dZ[l] = dA[l] * g'[l](Z[l]) #element wise product
+    dW[l] = (dZ[l]A[l-1].T) / m
+    db[l] = sum(dZ[l])/m # Dont forget axis=1, keepdims=True
+    dA[l-1] = w[l].T * dZ[l] # The multiplication here are a dot product.
+    Output dA[l-1], dW[l], db[l]
+
+for loss function :
+
+    dA[L] = (-(y/a) + ((1-y)/(1-a)))
+
+### Parameters vs Hyperparameters
+
+
+We know that the main parameters of the NN is W and b. But we also need other parameters that will "control" our NN. we call these parameters "hyper parameters" and they are :
+- The learning rate
+- the number of iteration 
+- the number of hidden layer
+- the number of hidden units
+- the activation function that we choose
+
+They control the main parameters that why we called them hyper parameters. 
+We will see other HP later such as momentum, mini batch size  etc.
+
+To find the best hyper parameters, we have to try different values and choose the best.
+
+Note that even if we tune our algorithm with the best hyper parameters, but one year from now, it can change. 
+
+
