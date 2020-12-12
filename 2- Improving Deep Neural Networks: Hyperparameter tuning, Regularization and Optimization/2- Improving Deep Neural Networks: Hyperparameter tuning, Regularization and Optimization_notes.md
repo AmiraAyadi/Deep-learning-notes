@@ -159,11 +159,11 @@ regularization) then you might not see it decrease monotonically.
 
     keep_prob = 0.8 # 0 <= keep_prob <= 1
     l = 3 # this code is only for layer 3
-    # the generated number that are less than 0.8 will be dropped. 80% stay, 20% dropped
+    #the generated number that are less than 0.8 will be dropped. 80% stay, 20% dropped
     d3 = np.random.rand(a[l].shape[0], a[l].shape[1]) < keep_prob
     a3 = np.multiply(a3,d3) # keep only the values in d3
-    # increase a3 to not reduce the expected value of output
-    # (ensures that the expected value of a3 remains the same) - to solve the scaling problem
+    #increase a3 to not reduce the expected value of output
+    #(ensures that the expected value of a3 remains the same) - to solve the scaling problem
     a3 = a3 / keep_prob
 
 
@@ -406,3 +406,263 @@ L2-regularization relies on the assumption that a model with small weights is si
 
 -   Gradient checking verifies closeness between the gradients from backpropagation and the numerical approximation of the gradient (computed using forward propagation).
 -   Gradient checking is slow, so we don't run it in every iteration of training. You would usually run it only to make sure your code is correct, then turn it off and use backprop for the actual learning process.
+
+
+
+## Optimization algorithms
+
+### Mini-batch gradient descent
+
+We are able to train neural networks on a huge data set and that training is slow. Having fast optimization algorithms, can really speed up your efficiency. Let's talk about mini-batch gradient descent.
+
+- suppose we have 50 million examples for training, so `m= 50 million`, maybe the training of these huge data won't fit into the memory at once, or will take a lot of time to compute at once, we have to find an other way to train. 
+- One faster way to do this is by making the gradient descent process only some of the data at once, or **mini-batches**.
+- In our example, suppose we split our m nto mini-batches of 1000, so a new notation would be :
+
+    X^{1} = 0.....1000, where {1] is the mini-batche number, for m=50 milion, there will be 5000 mini batches of 1000 each.
+
+We do the same to Y, so one mini-batches would be : `t = X{t}, Y{t}`
+So the difference is that in batch gradient descent, we run the algorithm on the whole dataset at once. While on the mini-batches gradient descent, we run it on the mini-batches.
+
+Here a pesudo code of the implementation of the mini-batches grandient descent :
+
+    for t = 1:No_of_batches 
+    	AL, caches = forward_prop(X{t}, Y{t})
+    	cost = compute_cost(AL, Y{t})
+    	grads = backward_prop(AL, caches)
+    	update_parameters(grads)
+
+- we will call one loop over one mini-batches an **epoch** (a single pass trought the training set) and of course, the code inside the loop is vectorized.
+
+Note that this method work more faster in large dataset.
+
+### Understanding mini-batch gradient descent
+
+If we've had the cost function J as a function of different iterations it should decrease on every single iteration.
+On mini batch gradient descent though, if you plot progress on your cost function, then it may not decrease on every iteration. It could contain some ups
+and downs but generally it has to go down.
+
+If the mini-batches = m, so we took the whole dataset, and that just **batch gradient descent**. 
+
+If the mini-batches = 1, then we took every single example of X and Y, and run the gradient descent on them. This is the **stochastic gradient descent**
+
+The best thing to do is to choose a mini-batche size between 1 and m. That is the **mini-batches gradient descent**.
+
+Here is the difference between each of these three gradient descent :
+
+- Batch gradient descent:
+	- too long per iteration (epoch)
+- Stochastic gradient descent:
+	- too noisy regarding cost minimization (can be reduced by using smaller learning rate)
+	- won't ever converge (reach the minimum cost)
+	- lose speedup from vectorization
+- Mini-batch gradient descent:
+	- faster learning: you have the vectorization advantage make progress without waiting to process the entire                    training set
+	- doesn't always exactly converge (oscelates in a very small region, but you can reduce learning rate)
+
+So one question can be how to choose this mini-batches size?
+
+If we have a small training set (< 2000 examples) -> use batch gradient descent.
+
+It your dataset is bigger, use a mini batches that (it has to be a) is  power of 2 (because of the way computer memory is layed out and accessed, sometimes your code
+runs faster if your mini-batch size is a power of 2) so choose for example: 64, 128, 256, 512, 1024, ...
+
+Finally, make sure that mini-batch fits in CPU/GPU memory.
+
+Note that the mini-batches size can be added to the list of the hyperparameters to search and tune.
+
+### Exponentially weighted averages
+
+To talk about the other algorithms that work better than the gradien descent, we need to fisrt learn what is the Exponentially weighted averages and how it works. 
+
+let's illustrate this but ploting the temperature of days trough the year. We can see that they the temp. is small in winter and big in the summer but mostly that the data is noisy.
+
+![noisy](https://i.ibb.co/fNSxrjC/image.png)
+
+To compute the Exponentially weighted averages, we can do:
+
+    V0 = 0
+    V1 = 0.9 * V0 + 0.1 * t(1) = 4 # 0.9 and 0.1 are hyperparameters
+    V2 = 0.9 * V1 + 0.1 * t(2) = 8.5
+    V3 = 0.9 * V2 + 0.1 * t(3) = 12.15
+    ...
+
+That lead us to a general equation : 
+
+    V(t) = beta * v(t-1) + (1-beta) * theta(t)
+
+If we plot this it will represent averages over ~ (1 / (1 - beta)) entries:
+
+- beta = 0.9 will average last 10 entries
+- beta = 0.98 will average last 50 entries
+- beta = 0.5 will average last 2 entries
+
+### Understanding exponentially weighted averages
+
+What the EWA really doing ?
+
+The intuition of that equation is that we take all the theta-(t-1) and replace it by the value of the equation for that value :
+
+![intuition](https://i.ibb.co/V2S4gkB/image.png)
+- We can implement this algorithm in pseudo code:
+
+    v = 0
+    Repeat
+    {
+	    Get theta(t)
+	    v = beta * v + (1-beta) * theta(t)
+    }
+
+- We can compute a moving window, where you explicitly sum over the last 10 days, the last 50 days temperature and just divide by 10 or divide by 50 and that usually gives you a better estimate. But the disadvantage of that is explicitly keeping all the temperatures around and sum of the last 10 days is it requires more memory and it's just more complicated to implement and is computationally more expensive. This is a very efficient way to do so both from computation and memory efficiency point of view which is why it's used in a lot of machine learning. Not to mention that there's just one line of code which is, maybe, another advantage.
+
+### Bias correction in exponentially weighted averages
+
+- The first value of the algorithm is very pooorly estimated because of the initial phase `v0= 0`.
+- The bias correction helps make the exponentially weighted averages more accurate.
+- To solve the bias issue we have to use this equation:
+
+    v(t) = (beta * v(t-1) + (1-beta) * theta(t)) / (1 - beta^t)
+
+As t becomes larger the `(1 - beta^t)` becomes close to 1.
+
+
+### Gradient descent with momentum
+
+There's an algorithm called momentum, or gradient descent with momentum that almost always works faster than the standard gradient descent algorithm.
+
+the basic idea is to compute an exponentially weighted average of your gradients, and then use that gradient to update your weights instead. Let's unpack that and see how we can actually implement this.
+
+Pseudo code :
+
+    vdW = 0, vdb = 0
+    on iteration t:
+	    # can be mini-batch or batch gradient descent compute dw, db on current mini-batch
+	    vdW = beta * vdW + (1 - beta) * dW
+	    vdb = beta * vdb + (1 - beta) * db
+	    W = W - learning_rate * vdW
+	    b = b - learning_rate * vdb
+
+- Momentum helps the cost function to go to the minimum point in a more fast and consistent way.
+- beta is another hyperparameter . Note that beta = 0.9 is very common and works very well in most cases.
+
+- In practice people don't bother implementing bias correction when implementing gradient descent with momentum.
+
+- Some paper will omit the (1 - beta) but Andrew prefer the first version. It's more intuitive.
+
+### RMSprop
+
+There's another algorithm called RMSprop, which stands for **root mean square prop**, that can also speed up gradient descent. Let's see how it works.
+
+The pseudo code : 
+
+    sdW = 0, sdb = 0
+    on iteration t:
+	    # can be mini-batch or batch gradient descent compute dw, db on current mini-batch
+	    sdW = (beta * sdW) + (1 - beta) * dW^2 	# squaring is element-wise
+	    sdb = (beta * sdb) + (1 - beta) * db^2 	# squaring is element-wise
+	    W = W - learning_rate * dW / sqrt(sdW)
+	    b = B - learning_rate * db / sqrt(sdb)
+
+Let's say that b is the vertical direction and w the horizental direction. RMSprop will make the cost function move slower on the b direction and faster on the w direction.
+
+- Ensure that sdW is not zero by adding a small value epsilon (e.g. epsilon = 10^-8 ) to it:
+
+    W = W - learning_rate * dW / (sqrt(sdW) + epsilon)
+
+With RMSprop you can increase your learning rate.
+
+One fun fact about RMSprop, it was actually first proposed not in an academic research paper, but in a Coursera course that Jeff Hinton had taught on Coursera many years ago.
+
+### Adam optimization algorithm
+
+- The Adam optimization algorithm is basically taking momentum and rms prop and putting them together. Adam optimization and RMSprop are among the optimization algorithms that worked very well with a lot of NN architectures.
+
+Here the pseudo code :
+
+    vdW = 0, vdW = 0
+    sdW = 0, sdb = 0
+    on iteration t:
+	    # can be mini-batch or batch gradient descent
+	    compute dw, db on current mini-batch
+	    vdW = (beta1 * vdW) + (1 - beta1) * dW # momentum
+	    vdb = (beta1 * vdb) + (1 - beta1) * db # momentum
+	    sdW = (beta2 * sdW) + (1 - beta2) * dW^2 # RMSprop
+	    sdb = (beta2 * sdb) + (1 - beta2) * db^2 # RMSprop
+	    vdW = vdW / (1 - beta1^t) # fixing bias
+	    vdb = vdb / (1 - beta1^t) # fixing bias
+	    sdW = sdW / (1 - beta2^t) # fixing bias
+	    sdb = sdb / (1 - beta2^t) # fixing bias
+	    W = W - learning_rate * vdW / (sqrt(sdW) + epsilon)
+	    b = B - learning_rate * vdb / (sqrt(sdb) + epsilon)
+
+
+Hyperparameters for Adam:
+- Learning rate: needed to be tuned.
+- beta1 : parameter of the momentum - 0.9 is recommended by default.
+- beta2 : parameter of the RMSprop - 0.999 is recommended by default.
+- epsilon : 10^-8 is recommended by default.
+
+- Adam Stands for Adaptive Moment Estimation.
+
+### Learning rate decay
+
+One of the things that might help speed up your learning algorithm, is to slowly reduce your learning rate over time. We call this learning rate decay.
+
+As mentioned before mini-batch gradient descent won't reach the optimum point (converge). But by making the learning rate decay with iterations it will be much closer to it because the steps (and possible oscillations) near the optimum are smaller.
+
+One technique equations is :
+
+`learning_rate = (1 / (1 + decay_rate * epoch_num)) * learning_rate_0`
+
+Note that the decay rate here becomes another hyper-parameter, which you might need to tune.
+
+Other learning rate decay methods :
+- `learning_rate = (0.95 ^ epoch_num) * learning_rate_0` which is the exponentially decay
+- `learning_rate = (k / sqrt(epoch_num)) * learning_rate_0`
+
+Some people are making changes to the learning rate manually.
+
+For Andrew Ng, learning rate decay has less priority.
+
+### The problem of local optima
+
+In the early days of deep learning, people used to worry a lot about the optimization algorithm getting stuck in bad local optima. But as this theory of deep learning has advanced, our understanding of local optima is also changing.
+
+- The normal local optima is not likely to appear in a deep neural network because data is usually high dimensional. For point to be a local optima it has to be a local optima for each of the dimensions which is highly unlikely.
+- It's unlikely to get stuck in a bad local optima in high dimensions, it is much more likely to get to the saddle point rather to the local optima, which is not a problem.
+- The problem can be the plateaus, they can make the learning very very slow. They are a region where the derivative is close to 0 for a long time (like an horizental zone). In such situation, the algorithm that we learn earlier can do a good job. They speed up the rate rate at which you could move down the plateau and then get off the plateau.
+
+**What you should remember**:
+
+-   The difference between gradient descent, mini-batch gradient descent and stochastic gradient descent is the number of examples you use to perform one update step.
+-   You have to tune a learning rate hyperparameter αα.
+-   With a well-turned mini-batch size, usually it outperforms either gradient descent or stochastic gradient descent (particularly when the training set is large).
+-  Shuffling and Partitioning are the two steps required to build mini-batches
+-   Powers of two are often chosen to be the mini-batch size, e.g., 16, 32, 64, 128.
+-   Momentum takes past gradients into account to smooth out the steps of gradient descent. It can be applied with batch gradient descent, mini-batch gradient descent or stochastic gradient descent.
+-   You have to tune a momentum hyperparameter β and a learning rate α.
+
+
+## Hyperparameter tuning
+
+### Tuning process
+
+Here are some tips for how to systematically organize your hyperparameter tuning process.
+
+The hyperparameters we like to tune (from must important to Andrew to less important):
+Hyperparameters importance are (as for Andrew Ng):
+-  Learning rate.
+-  Momentum beta.
+-  Mini-batch size.
+-  No. of hidden units.
+-  No. of layers.
+-  Learning rate decay.
+-  Regularization lambda.
+-  Activation functions.
+-  Adam beta1 & beta2 . # almost never tuned
+
+- In earlier generations of machine learning algorithms, if you had two hyperparameters, it was common practice to sample the points in a grid and systematically explore these values. This practice works okay when the number of hyperparameters was relatively small.
+
+In deep learning, we will just try random values. In practice it's just hard to know in advance which hyperparameters turn out to be the really important hyperparameters for your application and sampling at random rather than in the grid shows that you are more richly exploring set of possible values for the most important hyperparameters, whatever they turn out to be.
+
+- Another common practice is to use a coarse to fine sampling scheme : When you find some hyperparameters values that give you a better performance -> zoom into a smaller region around these values and sample more densely within this space.
