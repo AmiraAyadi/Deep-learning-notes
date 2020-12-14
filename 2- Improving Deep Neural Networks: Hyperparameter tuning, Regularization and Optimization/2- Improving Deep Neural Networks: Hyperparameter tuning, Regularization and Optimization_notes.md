@@ -47,7 +47,6 @@ For the problem of cat classification, if we know that a human error for this pr
 	- Training error: 0.5%
 	- Test error: 1%
 
-(Note pour moi : on dit un grand biais parce qu'il y a une grande difference entre les vrai parameters et les parmaeters trouvé mais genre au global. On dit grande variance parce que la courbe en soit varie beaucoup trop pour vraiment coller au point des training examples.)
 
 ### Basic Recipe for Machine learning
 
@@ -407,8 +406,6 @@ L2-regularization relies on the assumption that a model with small weights is si
 -   Gradient checking verifies closeness between the gradients from backpropagation and the numerical approximation of the gradient (computed using forward propagation).
 -   Gradient checking is slow, so we don't run it in every iteration of training. You would usually run it only to make sure your code is correct, then turn it off and use backprop for the actual learning process.
 
-
-
 ## Optimization algorithms
 
 ### Mini-batch gradient descent
@@ -504,6 +501,7 @@ What the EWA really doing ?
 The intuition of that equation is that we take all the theta-(t-1) and replace it by the value of the equation for that value :
 
 ![intuition](https://i.ibb.co/V2S4gkB/image.png)
+
 - We can implement this algorithm in pseudo code:
 
     v = 0
@@ -650,7 +648,6 @@ In the early days of deep learning, people used to worry a lot about the optimiz
 Here are some tips for how to systematically organize your hyperparameter tuning process.
 
 The hyperparameters we like to tune (from must important to Andrew to less important):
-Hyperparameters importance are (as for Andrew Ng):
 -  Learning rate.
 -  Momentum beta.
 -  Mini-batch size.
@@ -666,3 +663,246 @@ Hyperparameters importance are (as for Andrew Ng):
 In deep learning, we will just try random values. In practice it's just hard to know in advance which hyperparameters turn out to be the really important hyperparameters for your application and sampling at random rather than in the grid shows that you are more richly exploring set of possible values for the most important hyperparameters, whatever they turn out to be.
 
 - Another common practice is to use a coarse to fine sampling scheme : When you find some hyperparameters values that give you a better performance -> zoom into a smaller region around these values and sample more densely within this space.
+
+- All this methods can be automated.
+
+### Using an appropriate scale to pick hyperparameters
+
+Sampling at random, over the range of hyperparameters, can allow you to search over the space of hyperparameters more efficiently. But it turns out that sampling at random doesn't mean sampling uniformly at random. Instead, it's important to pick the appropriate scale on which to explore the hyperparamaters.
+
+When we looking for the best number of layer or number of hidden units, if we think that a range [2 - 4] for the first and a range of [50, 100] for the second is a good idea, then sampling uniformly at random along these ranges might be reasonable. 
+
+For other hyperparameters,  like alpha, which is very small it's not a good idea :
+
+![hyper_search](https://i.ibb.co/fMVnHDf/image.png)
+
+It's better to search for the right ones using the logarithmic scale rather then in linear scale:
+Calculate: 
+
+    a_log = log(a) # e.g. a = 0.0001 then a_log = -4
+
+and : 
+
+    b_log = log(b) # e.g. b = 1 then b_log = 0
+
+Then:
+
+    r = (a_log - b_log) * np.random.rand() + b_log
+    # In the example the range would be from [-4, 0] because rand range [0,1)
+    result = 10^r
+
+It uniformly samples values in log scale from [a,b] and that prevent us to ignore all the values between 0.0001 and 0.01 in our example.
+
+If we want to use the last method on exploring on the "momentum beta":
+- Beta best range is from 0.9 to 0.999.
+- You should search for 1 - beta in range 0.001 to 0.1 (1 - 0.9 and 1 - 0.999) and the use a= 0.001 and b = 0.1 . Then:
+
+    a_log = -3
+    b_log = -1
+    r = (a_log - b_log) * np.random.rand() + b_log
+    beta = 1 - 10^r
+    # because 1 - beta = 10^r
+
+### Hyperparameters tuning in practice: Pandas vs. Caviar
+
+In deep learning, intuitions about hyperparameter settings from one application area may or may not transfer to a different one.
+
+Andrew recommend maybe just retesting or reevaluating your hyperparameters at least once every several months.
+
+In terms of how people go about searching for hyperparameters, they are two major different ways in which people go about it :
+
+One way is if you babysit one model (if you don't have much computational resources):
+- Day 0 you might initialize your parameter as random and then start training.
+- Then you watch your learning curve gradually decrease over the day.
+- And each day you nudge your parameters a little during training.
+This is the panda approach.
+
+Another way if you have enough computational resources, you can run some models in parallel and at the end of the day(s) you check the results.
+This is the Caviar approach.
+
+The names are chosen because of panda (and how they have on single baby and make sure it's ok) vs caviar (and fish).
+
+##  Batch Normalization
+
+### Normalizing activations in a network
+
+Now, it turns out that there's one other technique can make your neural network much more robust to the choice of hyperparameters. It doesn't work for all neural networks, but when it does, it can make the hyperparameter search much easier and also make training go much faster : that is batch normalization.
+
+It's one of the most important ideas in the rise of DL and it was created by two researchers, Sergey Ioffe and Christian Szegedy.
+
+Remember that before, we normalized input by subtracting the mean and dividing by variance. This helped a lot for the shape (long to round) of the cost function and for reaching the minimum point faster.
+
+If this work well for the input data, can we do the same on each activation function of each hidden layer l to make training on the layer l+1 more efficient ? That is what batch normalization about.
+
+Note that there are some debates in the deep learning literature about whether you should normalize values before the activation function Z[l] or after applying the activation function A[l] . In practice, normalizing Z[l] is done much more often so let's show we do this :
+
+- Given Z[l] = [z(1), ..., z(m)] , i = 1 to m (for each input)
+- Compute mean = 1/m * sum(z[i])
+- Compute variance = 1/m * sum((z[i] - mean)^2)
+- Then Z_norm[i] = (z[i] - mean) / np.sqrt(variance + epsilon) (add epsilon for numerical stability if variance =0)
+
+Here we are forcing the inputs to a distribution with zero mean and variance of 1.
+
+- Then Z_tilde[i] = gamma * Z_norm[i] + beta
+
+To make inputs belong to other distribution (with other mean and variance). gamma and beta are learn-able parameters of the model. whereas previously you were using these values z1, z2, and so on, you would now use z tilde i, Instead of zi for the later computations in your neural network.
+
+Note: if gamma = sqrt(variance + epsilon) and beta = mean then Z_tilde[i] = z[i]
+
+### Fitting Batch Norm into a neural network
+
+![adding bn to nn](https://i.ibb.co/VNY32G3/image.png)
+
+Our NN parameters will be:
+- W[1] , b[1] , ..., W[L] , b[L] , beta[1] , gamma[1] , ..., beta[L] , gamma[L]
+beta[1] , gamma[1] , ..., beta[L] , gamma[L] are updated using any optimization algorithms (like GD, RMSprop, Adam).
+
+Note that Batch normalization is usually applied with mini-batches.
+
+- If we are using batch normalization parameters b[1] , ..., b[L] doesn't count because they will be eliminated after mean subtraction step (because taking the mean of a constant b[l] will eliminate the b[l]). So the parameters will be W[l] , beta[l] , and alpha[l] .
+
+Here the implementation of gradient descent with batch normalization :
+
+![implementation](https://i.ibb.co/wyNFzQn/image.png)
+
+### Why does Batch Norm work?
+
+One intuition behind why batch norm works is, just like how by normalizing the input features, the X's, to mean zero and variance one, that can speed up learning, this is doing a similar thing, but further values in your hidden units and not just for your input there.
+Now, this is just a partial picture for what batch norm is doing.
+
+
+A second reason why batch norm works is it makes weights, later or deeper in your network, more robust to changes then weights in earlier layers of the neural network.
+
+- the batch normalization reduces the amount that the distribution of these hidden unit values shifts around. (black cat vs color cat classification). it limits the amount to which updating the parameters in the earlier layers can affect the distribution of values that
+the later layer now sees and therefore has to learn on.
+
+So batch norm reduces the problem of the input values changing, it really causes these values to become more stable so that the later layers of the neural network has more firm ground to stand on and even though the input distribution changes a bit, it changes less.
+
+Batch normalization does some regularization:
+- Each mini batch is scaled by the mean/variance computed of that mini-batch.
+This adds some noise to the values Z[l] within that mini batch. So similar to dropout it adds some noise to each hidden layer's activations.
+- This has a slight regularization effect.
+- Using bigger size of the mini-batch you are reducing noise and therefore regularization effect.
+- Don't rely on batch normalization as a regularization. It's intended for normalization of hidden units, activations and therefore speeding up learning. For regularization use other regularization techniques (L2 or dropout).
+
+### Batch Norm at test time
+
+Batch norm processes your data one mini batch at a time, but the test time you might need to process the examples one at a time. The mean and the variance of one example won't make sense. Let's see how we can adapt the network to do that.
+
+We have to compute an estimated value of mean and variance to use it in testing time. for that we can use the weighted average across the mini-batches. and at the end, we will use the estimated values of the mean and variance to test. This method is also sometimes called by the fancy name of "Running average".
+
+In practice most often you will use a deep learning framework and it will contain some default implementation of doing such a thing.
+
+## Multi-class classification
+
+### Softmax Regression
+
+The classification examples we've talked about have used binary classification, where we had two possible labels, 0 or 1. There's a generalization of logistic regression called Softmax regression fo the case where we have multiple possible classes.
+
+Let's take an example where we try to classify cats (class 1), dogs (class 2), baby chicks (class 3) and none of the above (class 0).
+
+The notation we are going to use is :
+- C = no. of classes
+- Range of classes is (0, ..., C-1)
+- In output layer Ny = C.
+
+Each of C values in the output layer will contain a probability of the example to belong to each of the classes.
+
+Here are the equations of the softmax activation function:
+
+    t = e^(Z[L]) # shape(C, m)
+    A[L] = e^(Z[L]) / sum(t) # shape(C, m), sum(t) - sum of t's for each example (shape (1, m))  
+
+### Training a softmax classifier
+
+The name softmax comes from contrasting it to what's called a hard max which would have taken the vector Z and just put a 1 in the position of the biggest element  of Z and then 0s everywhere else. Whereas in contrast, a softmax is a more gentle mapping from Z to these probabilities.
+
+Softmax regression or generalizes the logistic activation function to C classes rather than just two classes. And it turns out that if C = 2, then softmax with C = 2 essentially reduces to logistic regression. The proof is that if C = 2 and if you apply softmax then the result should be the same as if you applied  Logistic regression.
+
+The loss function used with softmax is :
+
+    L(y, y_hat) = - sum(y[j] * log(y_hat[j])) # j = 0 to C-1
+
+The cost function used with softmax:
+
+    J(w[1], b[1], ...) = - 1 / m * (sum(L(y[i], y_hat[i]))) # i = 0 to m
+
+Back propagation with softmax:
+
+    dZ[L] = Y_hat - Y
+
+The derivative of softmax is:
+
+    Y_hat * (1 - Y_hat)
+
+## Introduction to programming frameworks
+
+
+### Deep learning frameworks
+
+Today, there are many deep learning frameworks that makes it easy for you to implement neural networks, and here are some of the leading ones. 
+
+- Caffe/ Caffe2
+- CNTK
+- DL4j
+- Keras
+- Lasagne
+- mxnet
+- PaddlePaddle
+- TensorFlow
+- Theano
+- Torch/Pytorch
+
+How to choose deep learning framework:
+- Ease of programming (development and deployment)
+- Running speed
+- Truly open (open source with good governance)
+
+Note that frameworks can not only shorten your coding time but sometimes also perform optimizations that speed up your code.
+
+### TensorFlow
+
+this video is shows the basic structure of a TensorFlow program. Let's see how to implement the cost function J :
+
+    J(w) = w^2 - 10w + 25
+
+Here we recognizee the `(w-5)^2` form of the equation, thus W=5 is the minimum we except.
+
+In TensorFlow you implement only the forward propagation and TensorFlow will do the backpropagation by itself.
+
+In TensorFlow a placeholder is a variable you can assign a value to later.
+
+If you are using a mini-batch training you should change the feed_dict={x: coefficients} to the current mini-batch
+data.
+
+In deep learning frameworks there are a lot of things that you can do with one line of code like changing the optimizer.
+
+### Notebook notes
+
+Writing and running programs in TensorFlow has the following steps:
+
+1.  Create Tensors (variables) that are not yet executed/evaluated.
+2.  Write operations between those Tensors.
+3.  Initialize your Tensors.
+4.  Create a Session.
+5.  Run the Session. This will run the operations you'd written above.
+
+A placeholder is simply a variable that you will assign data to only later, when running the session. We say that you **feed data** to these placeholders when running the session.
+
+For computing a function like sigmoid :
+2.  Create placeholders
+3.  Specify the computation graph corresponding to operations you want to compute
+4.  Create the session
+5.  Run the session, using a feed dictionary if necessary to specify placeholder variables' values.
+
+**What you should remember**:
+
+-   Tensorflow is a programming framework used in deep learning
+-   The two main object classes in tensorflow are Tensors and Operators.
+-   When you code in tensorflow you have to take the following steps:
+    -   Create a graph containing Tensors (Variables, Placeholders ...) and Operations (tf.matmul, tf.add, ...)
+    -   Create a session
+    -   Initialize the session
+    -   Run the session to execute the graph
+-   You can execute the graph multiple times as you've seen in model()
+-   The backpropagation and optimization is automatically done when running the session on the "optimizer" object.
