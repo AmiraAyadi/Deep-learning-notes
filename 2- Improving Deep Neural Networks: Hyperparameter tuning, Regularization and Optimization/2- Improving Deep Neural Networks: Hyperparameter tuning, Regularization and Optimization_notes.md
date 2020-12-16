@@ -628,7 +628,7 @@ In the early days of deep learning, people used to worry a lot about the optimiz
 
 - The normal local optima is not likely to appear in a deep neural network because data is usually high dimensional. For point to be a local optima it has to be a local optima for each of the dimensions which is highly unlikely.
 - It's unlikely to get stuck in a bad local optima in high dimensions, it is much more likely to get to the saddle point rather to the local optima, which is not a problem.
-- The problem can be the plateaus, they can make the learning very very slow. They are a region where the derivative is close to 0 for a long time (like an horizental zone). In such situation, the algorithm that we learn earlier can do a good job. They speed up the rate rate at which you could move down the plateau and then get off the plateau.
+- The problem can be the plateaus, they can make the learning very very slow. There are regions where the derivative is close to 0 for a long time (like an horizental zone). In such situation, the algorithm that we learn earlier can do a good job. They speed up the rate rate at which you could move down the plateau and then get off the plateau.
 
 **What you should remember**:
 
@@ -709,7 +709,7 @@ In deep learning, intuitions about hyperparameter settings from one application 
 
 Andrew recommend maybe just retesting or reevaluating your hyperparameters at least once every several months.
 
-In terms of how people go about searching for hyperparameters, they are two major different ways in which people go about it :
+In terms of how people go about searching for hyperparameters, there are two major different ways in which people go about it :
 
 One way is if you babysit one model (if you don't have much computational resources):
 - Day 0 you might initialize your parameter as random and then start training.
