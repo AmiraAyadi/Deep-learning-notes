@@ -330,3 +330,328 @@ VGG-19 because it does the same.
 ### ResNets
 
 
+
+Very deep neural networks are difficult to train because of vanishing and exploding gradient types of problems. In this video, you'll learn about skip connections which allows you to take the activation from one layer and suddenly feed it to another layer even much deeper in the neural network. And using that, you'll build ResNet which enables you to train very, very deep networks.
+
+ResNets are built out of some Residual blocks :
+
+![](https://i.ibb.co/Y7F5scJ/image.png)
+
+What we do here is adding `a^l` to `z^l+2`, so we are skiping a connexion and we added a short cut.
+
+By doing so, the authors of this methods find out that we can train a very deep NN. 
+
+These networks can go deeper without hurting the performance. In the normal NN - Plain networks - the theory tell us that if we go deeper we will get a better solution to our problem, but because of the vanishing and exploding gradients problems the performance of the network suffers as it goes deeper. Thanks to Residual Network we can go deeper as we want now.
+
+### Why ResNets Work
+
+Let's take one example that explained why ResNet works:
+
+We already said that adding layers to your NN might hurt its performances. This statement is less true when using ResNet. Let's take a NN, make it deeper and suppose we are using the ReLu :
+
+![](https://i.ibb.co/c1mbkFM/image.png)
+
+Then if we are using L2 regularization for example, W[l+2] will be zero. Lets say that b[l+2] will be zero too, then a[l+2] = g( a[l] ) = a[l] with no negative values.
+This show that **identity function is easy for a residual block to learn.** And that why it can train deeper NNs. 
+
+Note that the two layers we added doesn't hurt the performance of big NN we made.
+if all of these heading units learned something useful then maybe you can do even better than learning the identity function. And what goes wrong in very deep plain nets in very deep network without this residual of the skip connections is that when you make the network deeper and deeper, it's actually very difficult for it to choose parameters that learn even the identity function which is why a lot of layers end up making your result worse rather than making your result better.
+
+
+Hint: dimensions of z[l+2] and a[l] have to be the same in ResNets. In case they have different dimensions what we put a matrix parameters (Which can be learned or fixed)
+
+    a[l+2] = g( z[l+2] + ws * a[l] ) # The added Ws should make the dimensions equal
+
+- ws also can be a zero padding.
+
+Using a skip-connection helps the gradient to backpropagate and thus helps you to train deeper networks.
+
+I think that when Andrew says its easy to learn the identity for the Res Blocks, it's in the case where the perfs are "worst" with additional block, and just computing g(a) makes the model the same as without the block.
+
+To transform a plain NN to a ResNet :
+
+![](https://i.ibb.co/gFBpMn7/image.png)
+
+### Networks in Networks and 1x1 Convolutions
+
+In terms of designing content architectures, one of the ideas that really helps is using a one by one convolution. Now, you might be wondering, what does a one by one convolution do? Isn't just multiplying by a number ? Let's take two examples :
+
+
+![](https://i.ibb.co/6rP5yfm/image.png)
+
+In the first example, we end up just multiplying the `6x6` matrix by 2. - Not very useful.
+With the second example thus, a `6 x 6x 32` matrix convolved by a ` 1 x 1 x 32` filter makes much more sense.
+
+This will look at each of the 36 different positions here, and it will take the element wise product between 32 numbers on the left and 32 numbers in the filter and then apply a ReLU non-linearity to it after that.
+So one way to think about the one by one convolution is that, it is basically having a fully connected neuron network. The NN will take a slice of our input as the input and applying the filter (weight) then ReLu to finally output our matrix with #filters as the third dimension. 
+
+Note that a ` 1 x 1` convolution is also called a Network in Network.
+
+A 1 x 1 convolution is useful when we want to shrink the number of channels. We also call this feature transformation. We will later see that by shrinking it we can save a lot of computations.
+
+It is also useful if we have specified the number of 1 x 1 Conv filters to be the same as the input number of channels then the output will contain the same number of channels. Then the 1 x 1 Conv will act like a non linearity and will learn non linearity operator.
+
+Note : the original paper (Lin 2013 - Network in Network) states "Convolution layers take **inner product** of the linear filter and the underlying receptive field followed by a nonlinear activation function at every local portion of the input. ". That means for layer l you need to calculate (in terms of dimensions)
+
+    (1 x n_c) x (n_c x 1) = 1 x 1
+
+ 
+
+### Inception Network Motivation
+
+When designing a ConvNet, one have to pick the filter size, if pooling must be used and so many other choice to make. The Inception Network tells us **why not using them all ?**  This will be more complicated network architecture but it also works very well!
+
+Let's see it :
+
+ ![](https://i.ibb.co/dJ4JdqT/image.png)
+
+Here what we just did is applying all the convs and pools layers that we might want and just stack them together. So the input to the inception module are `28 x 28 x 192` and the output are `28 x 28 x 256`.
+
+We will let the NN decide wich it want to use the must.
+
+The problem of this method is the computational cost. If we have just focused on a 5 x 5 Conv that we have done in the last example : There are 32 same filters of 5 x 5, and the input are `28 x 28 x 192`. the output should be `28 x 28 x 32`.
+
+The total number of multiplications needed here are:
+
+Number of outputs * Filter size * Filter size * Input dimension which equals: 28 * 28 * 32 * 5 * 5 * 192 = 120 M
+
+120 Mil multiply operation still a problem in the modern day computers.
+
+
+Using a 1 x 1 convolution we can reduce 120 mil to just 12 mil. Lets see how.
+
+![](https://i.ibb.co/NZ21TYD/image.png)
+
+A 1 x 1 Conv here is called Bottleneck `BN`
+
+So to summarize, if you are building a layer of a neural network and you don't want to have to decide, do you want a 1 by 1, or 3 by 3, or 5 by 5, or pooling layer, the inception module let's you say let's do them all, and let's concatenate the results.
+
+And then we run to the problem of computational cost. And what you saw here was how using a 1 by 1 convolution, you can create this bottleneck layer thereby reducing the computational cost significantly.
+
+Now you might be wondering, does shrinking down the representation size so dramatically, does it hurt the performance of your neural network?
+
+It turns out that so long as you implement this bottleneck layer so that within reason, you can shrink down the representation size significantly, and it doesn't seem to hurt the performance, but saves you a lot of computation.
+
+### Inception Network
+
+We've already seen all the basic building blocks of the Inception network.
+
+The inception network consist of concatenated blocks of the Inception module.
+
+The name inception was taken from a meme image which was taken from Inception movie
+
+the inception network is largely the inception module repeated a bunch of times throughout the network. Since the development of the original inception module, the author and others have built on it and come up with other versions as well.
+
+So there are research papers on newer versions of the inception algorithm. And you sometimes see people use some of these later versions as well in their work, like inception v2, inception v3, inception v4
+
+## Practical advices for using ConvNets
+
+### Using Open-Source Implementation
+
+We've now learned about several highly effective neural network and ConvNet architectures. Here some practical advice on how to use them, first starting with using open source implementations.
+
+It turns out that a lot of these neural networks are difficult to replicate because a lot of details about tuning of the hyperparameters such as learning decay and other things and it's sometime difficult even for the best PhD student to replicate someone else's polished work just from reading their paper.
+
+Fortunately, a lot of deep learning researchers routinely open source their work on the Internet, such as on GitHub and we should do the same.
+
+If you see a research paper and you want to build over it, the first thing you should do is to look for an open source implementation for this paper.
+
+### Transfer Learning
+
+Sometimes networks take a long time to train and someone else might have used multiple GPUs and a very large dataset to pretrain some of these networks. And that allows you to do transfer learning using these networks.
+
+So if you are using a specific NN architecture that has been trained before, you can use this pretrained parameters/weight instead of random initialization to solve your problem.
+
+Depend on the amont of data we have, there are different recommendation for how to do this. Let's take an example with a cat classifier.
+
+If we don't have a lot of data :
+
+- The cat classification problem contains 3 classes Tigger, Misty and neither.
+- Andrew recommends to go online and download a good NN with its weights, remove the softmax activation layer and put your own one and make the network learn only the new layer while other layer weights are fixed/frozen.
+- Frameworks have options to make the parameters frozen in some layers using `trainable = 0 or freeze = 0`
+- One of the tricks that can speed up your training, is to run the pretrained NN without final softmax layer and get an intermediate representation of your images and save them to disk. And then use these representation to a shallow NN network. This can save you the time needed to run an image through all the layers. Its like converting your images into vectors.
+
+If we have a lot of data :
+
+- One thing you can do is to freeze few layers from the beginning of the pretrained network and learn the other weights in the network.
+- Some other idea is to throw away the layers that aren't frozen and put your own layers there.
+
+If we **really** have a lot of data :
+
+- You can fine tune all the layers in your pretrained network but **don't random initialize** the parameters, leave the learned parameters as it is and learn from there.
+
+### Data Augmentation
+
+If data is increased, your deep NN will perform better. Data augmentation is one of the techniques that deep learning uses to increase the performance of deep NN.
+
+This is true is you're using transfer learning as well.
+
+The data augmentation methods used in computer vision includes :
+- mirroring
+- random cropping :
+	- if we wrong crop, that can be a problem.
+	- make sure tour crops is big enough to not have this problem.
+- rotation, shearing, local warpinp (used a bit less)
+- Color Shifting
+	- adding distortions to R, G and B (more green, more blue etc) it will be different for the computer but the identity of the content stay the same. That make the algorithm more robust to identify cat (for example) even if the colors are changing.
+	- There are an algorithm which is called **PCA color augmentation** that decides the shifts needed automatically.
+
+How we should implement distortions during training? That depends on how many data we have. 
+
+You might have your training data stored in a hard disk, with a small training set, you can do almost anything and you'll be okay.
+
+But for very last training set, this is how people will often implement it: 
+
+- you might use a different CPU thread to make you a distorted mini batches while you are training your NN.
+
+Note that Data Augmentation has also some hyperparameters. A good place to start is to find an open source data augmentation implementation and then use it or fine tune these hyperparameters.
+
+### State of Computer Vision
+
+Deep learning has been successfully applied to many problems. There are few things unique to DL in computer vision. Here are some observations about deep learning for computer vision.
+
+
+![](https://i.ibb.co/cJqWsP8/image.png)
+
+Depend on our problem, we can have a lot or just a little amount of data. If we don't have that much data people tend to try more hand engineering for the problem "Hacks". Like choosing a more complex NN architecture. If we have more data, then researchers are tend to use simpler algorithms and less hand engineering.
+
+Because we haven't got that much data in a lot of computer vision problems, it relies a lot on hand engineering. One other thing to try here is Transfer Learning. 
+
+And so that's another set of techniques that's used a lot for when you have relatively little data. If you look at the computer vision literature, and look at the sort of ideas out there, you also find that people are really enthusiastic. They're really into doing well on standardized benchmark data sets and on winning competitions.
+
+So here some tips for doing well on benchmarks/winning competitions:
+
+- Ensembling.
+	- Train several networks independently and average their outputs. (sometime make you gain 2% but  this will slow down your production by the number of the ensembles. So this is used in compt. /bench. but never in production. Also it takes more memory as it saves all the models in the memory.
+	- To do that : after you decide the best architecture for your problem, initialize some of that randomly and train them independently.
+
+- Multi-crop at test time.
+	- Run classifier on multiple versions of test versions and average results.
+	- There is a technique called 10 crops that uses this.This can give you a better result in the production.
+
+- Use open source code
+	- Use architectures of networks published in the literature.
+	- Use open source implementations if possible.
+	- Use pretrained models and fine-tune on your dataset.
+
+### Notebook notes
+
+#### 1 - The problem of very deep neural networks
+
+Last week, you built your first convolutional neural network. In recent years, neural networks have become deeper, with state-of-the-art networks going from just a few layers (e.g., AlexNet) to over a hundred layers.
+
+* The main benefit of a very deep network is that it can represent very complex functions. It can also learn features at many different levels of abstraction, from edges (at the shallower layers, closer to the input) to very complex features (at the deeper layers, closer to the output). 
+* However, using a deeper network doesn't always help. A huge barrier to training them is vanishing gradients: very deep networks often have a gradient signal that goes to zero quickly, thus making gradient descent prohibitively slow. 
+* More specifically, during gradient descent, as you backprop from the final layer back to the first layer, you are multiplying by the weight matrix on each step, and thus the gradient can decrease exponentially quickly to zero (or, in rare cases, grow exponentially quickly and "explode" to take very large values). 
+* During training, you might therefore see the magnitude (or norm) of the gradient for the shallower layers decrease to zero very rapidly as training proceeds: 
+
+<img src="images/vanishing_grad_kiank.png" style="width:450px;height:220px;">
+<caption><center> <u> <font color='purple'> **Figure 1** </u><font color='purple'>  : **Vanishing gradient** <br> The speed of learning decreases very rapidly for the shallower layers as the network trains </center></caption>
+
+You are now going to solve this problem by building a Residual Network!
+
+#### 2 - Building a Residual Network
+
+In ResNets, a "shortcut" or a "skip connection" allows the model to skip layers:  
+
+<img src="images/skip_connection_kiank.png" style="width:650px;height:200px;">
+<caption><center> <u> <font color='purple'> **Figure 2** </u><font color='purple'>  : A ResNet block showing a **skip-connection** <br> </center></caption>
+
+The image on the left shows the "main path" through the network. The image on the right adds a shortcut to the main path. By stacking these ResNet blocks on top of each other, you can form a very deep network. 
+
+We also saw in lecture that having ResNet blocks with the shortcut also makes it very easy for one of the blocks to learn an identity function. This means that you can stack on additional ResNet blocks with little risk of harming training set performance.  
+    
+(There is also some evidence that the ease of learning an identity function accounts for ResNets' remarkable performance even more so than skip connections helping with vanishing gradients).
+
+Two main types of blocks are used in a ResNet, depending mainly on whether the input/output dimensions are same or different. You are going to implement both of them: the "identity block" and the "convolutional block."## 2 - Building a Residual Network
+
+In ResNets, a "shortcut" or a "skip connection" allows the model to skip layers:  
+
+<img src="images/skip_connection_kiank.png" style="width:650px;height:200px;">
+<caption><center> <u> <font color='purple'> **Figure 2** </u><font color='purple'>  : A ResNet block showing a **skip-connection** <br> </center></caption>
+
+The image on the left shows the "main path" through the network. The image on the right adds a shortcut to the main path. By stacking these ResNet blocks on top of each other, you can form a very deep network. 
+
+We also saw in lecture that having ResNet blocks with the shortcut also makes it very easy for one of the blocks to learn an identity function. This means that you can stack on additional ResNet blocks with little risk of harming training set performance.  
+    
+(There is also some evidence that the ease of learning an identity function accounts for ResNets' remarkable performance even more so than skip connections helping with vanishing gradients).
+
+Two main types of blocks are used in a ResNet, depending mainly on whether the input/output dimensions are same or different. You are going to implement both of them: the "identity block" and the "convolutional block."
+
+##### 2.1 - The identity block
+
+The identity block is the standard block used in ResNets, and corresponds to the case where the input activation (say $a^{[l]}$) has the same dimension as the output activation (say $a^{[l+2]}$). To flesh out the different steps of what happens in a ResNet's identity block, here is an alternative diagram showing the individual steps:
+
+<img src="images/idblock2_kiank.png" style="width:650px;height:150px;">
+<caption><center> <u> <font color='purple'> **Figure 3** </u><font color='purple'>  : **Identity block.** Skip connection "skips over" 2 layers. </center></caption>
+
+The upper path is the "shortcut path." The lower path is the "main path." In this diagram, we have also made explicit the CONV2D and ReLU steps in each layer. To speed up training we have also added a BatchNorm step. Don't worry about this being complicated to implement--you'll see that BatchNorm is just one line of code in Keras! 
+
+In this exercise, you'll actually implement a slightly more powerful version of this identity block, in which the skip connection "skips over" 3 hidden layers rather than 2 layers. It looks like this: 
+
+<img src="images/idblock3_kiank.png" style="width:650px;height:150px;">
+<caption><center> <u> <font color='purple'> **Figure 4** </u><font color='purple'>  : **Identity block.** Skip connection "skips over" 3 layers.</center></caption>
+
+Here are the individual steps.
+
+First component of main path: 
+- The first CONV2D has $F_1$ filters of shape (1,1) and a stride of (1,1). Its padding is "valid" and its name should be `conv_name_base + '2a'`. Use 0 as the seed for the random initialization. 
+- The first BatchNorm is normalizing the 'channels' axis.  Its name should be `bn_name_base + '2a'`.
+- Then apply the ReLU activation function. This has no name and no hyperparameters. 
+
+Second component of main path:
+- The second CONV2D has $F_2$ filters of shape $(f,f)$ and a stride of (1,1). Its padding is "same" and its name should be `conv_name_base + '2b'`. Use 0 as the seed for the random initialization. 
+- The second BatchNorm is normalizing the 'channels' axis.  Its name should be `bn_name_base + '2b'`.
+- Then apply the ReLU activation function. This has no name and no hyperparameters. 
+
+Third component of main path:
+- The third CONV2D has $F_3$ filters of shape (1,1) and a stride of (1,1). Its padding is "valid" and its name should be `conv_name_base + '2c'`. Use 0 as the seed for the random initialization. 
+- The third BatchNorm is normalizing the 'channels' axis.  Its name should be `bn_name_base + '2c'`. 
+- Note that there is **no** ReLU activation function in this component. 
+
+Final step: 
+- The `X_shortcut` and the output from the 3rd layer `X` are added together.
+- **Hint**: The syntax will look something like `Add()([var1,var2])`
+- Then apply the ReLU activation function. This has no name and no hyperparameters. 
+
+**Exercise**: Implement the ResNet identity block. We have implemented the first component of the main path. Please read this carefully to make sure you understand what it is doing. You should implement the rest. 
+- To implement the Conv2D step: [Conv2D](https://keras.io/layers/convolutional/#conv2d)
+- To implement BatchNorm: [BatchNormalization](https://faroit.github.io/keras-docs/1.2.2/layers/normalization/) (axis: Integer, the axis that should be normalized (typically the 'channels' axis))
+- For the activation, use:  `Activation('relu')(X)`
+- To add the value passed forward by the shortcut: [Add](https://keras.io/layers/merge/#add)
+
+
+##### 2.2 - The convolutional block
+
+The ResNet "convolutional block" is the second block type. You can use this type of block when the input and output dimensions don't match up. The difference with the identity block is that there is a CONV2D layer in the shortcut path: 
+
+<img src="images/convblock_kiank.png" style="width:650px;height:150px;">
+<caption><center> <u> <font color='purple'> **Figure 4** </u><font color='purple'>  : **Convolutional block** </center></caption>
+
+* The CONV2D layer in the shortcut path is used to resize the input $x$ to a different dimension, so that the dimensions match up in the final addition needed to add the shortcut value back to the main path. (This plays a similar role as the matrix $W_s$ discussed in lecture.) 
+* For example, to reduce the activation dimensions's height and width by a factor of 2, you can use a 1x1 convolution with a stride of 2. 
+* The CONV2D layer on the shortcut path does not use any non-linear activation function. Its main role is to just apply a (learned) linear function that reduces the dimension of the input, so that the dimensions match up for the later addition step. 
+
+The details of the convolutional block are as follows. 
+
+First component of main path:
+- The first CONV2D has $F_1$ filters of shape (1,1) and a stride of (s,s). Its padding is "valid" and its name should be `conv_name_base + '2a'`. Use 0 as the `glorot_uniform` seed.
+- The first BatchNorm is normalizing the 'channels' axis.  Its name should be `bn_name_base + '2a'`.
+- Then apply the ReLU activation function. This has no name and no hyperparameters. 
+
+Second component of main path:
+- The second CONV2D has $F_2$ filters of shape (f,f) and a stride of (1,1). Its padding is "same" and it's name should be `conv_name_base + '2b'`.  Use 0 as the `glorot_uniform` seed.
+- The second BatchNorm is normalizing the 'channels' axis.  Its name should be `bn_name_base + '2b'`.
+- Then apply the ReLU activation function. This has no name and no hyperparameters. 
+
+Third component of main path:
+- The third CONV2D has $F_3$ filters of shape (1,1) and a stride of (1,1). Its padding is "valid" and it's name should be `conv_name_base + '2c'`.  Use 0 as the `glorot_uniform` seed.
+- The third BatchNorm is normalizing the 'channels' axis.  Its name should be `bn_name_base + '2c'`. Note that there is no ReLU activation function in this component. 
+
+Shortcut path:
+- The CONV2D has $F_3$ filters of shape (1,1) and a stride of (s,s). Its padding is "valid" and its name should be `conv_name_base + '1'`.  Use 0 as the `glorot_uniform` seed.
+- The BatchNorm is normalizing the 'channels' axis.  Its name should be `bn_name_base + '1'`. 
+
+Final step: 
+- The shortcut and the main path values are added together.
+- Then apply the ReLU activation function. This has no name and no hyperparameters. 
