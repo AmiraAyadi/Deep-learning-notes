@@ -655,3 +655,588 @@ Shortcut path:
 Final step: 
 - The shortcut and the main path values are added together.
 - Then apply the ReLU activation function. This has no name and no hyperparameters. 
+
+
+
+#### What you should remember[](https://godrdpxw.labs.coursera.org/notebooks/week2/ResNets/Residual_Networks_v2a.ipynb#What-you-should-remember)
+
+-   Very deep "plain" networks don't work in practice because they are hard to train due to vanishing gradients.
+-   The skip-connections help to address the Vanishing Gradient problem. They also make it easy for a ResNet block to learn an identity function.
+-   There are two main types of blocks: The identity block and the convolutional block.
+-   Very deep Residual Networks are built by stacking these blocks together.
+
+## Object detection
+
+### Object localization 
+
+This week is about object detection. This is an area of CV that is exploding and work much better. 
+To do object detection, we need first to do object localization. Let's start with this.
+
+What are localization and detection ?
+
+![](https://i.ibb.co/LCLD1C3/image.png)
+
+The ideas for image classification will be useful for classification with localization and the ideas for localization will then turn out to be useful for detection
+
+We are already familiar with the image classification : input image, pass it to a ConvNet, add  softmax layer with the possible output. If we want to add here a localization, then we can change the NN to output the bounding box of the detected object. 
+
+We need to attached to the end of the new NN four numbers : bx , by , bh , and bw to tell the location of the class in the image. The dataset should contain this four numbers
+with the class too. (bx, by) is the midpoint of the bounding box and bh, bw is the height and the width. 
+
+Note that as we need to give position, we also need to precise that the upper left of the image will be (0, 0) and the bottom right will be (1,1).
+ 
+Example:
+
+    Y = [
+    Pc # Probability of an object is presented
+    bx # Bounding box
+    by # Bounding box
+    bh # Bounding box
+    bw # Bounding box
+    c1 # The classes
+    c2
+    c3
+    ...
+    ]
+
+so that will give us :
+
+![](https://i.ibb.co/xhry9Rv/image.png)
+
+ ? means we don't care with other values.
+ 
+Finally, the loss function that we can use will be :
+
+    L(y',y) = {
+	    (y1'-y1)^2 + (y2'-y2)^2 + ... if y1 = 1
+	    (y1'-y1)^2 if y1 = 0
+    }
+
+Here we used the square error just for the representation, but in practice we usually use logistic regression loss for pc , log likely hood loss for classes, and squared error for the bounding box.
+
+### Landmark Detection
+
+We saw how to output the bounding box in the previous section, in more general case, we can have the NN output just X, Y coordinates of important point in the image. Those are sometimes called landmarks. Let's see some examples:
+
+For example, if you are working in a face recognition problem you might want some points on the face like corners of the eyes, corners of the mouth, and corners of the nose and so on. This can help in a lot of application like detecting the pose of the face. Another application is when you need to get the skeleton of the person using different landmarks/points in the person which helps in some applications.
+
+The Y shape would be something like this:
+
+![](https://i.ibb.co/m0mGNNW/image.png)
+
+Note that in your labeled data, if l1x,l1y is the left corner of left eye, all other l1x,l1y of the other examples has to be the same.
+
+### Object Detection
+
+We are going to use a technique called **the sliding window** algorithm to solve object detection.
+
+Let's take an example of car detection.
+First step would be to train a CNN on cropped car image and non car image so that the model can tell us if one image is a car or not. Then with the sliding windws technique we will :
+
+- decide of a window size.
+- split the image into rectangles of the size of the window. The goal is to slide the window on every region of the image so that every part of it is covered. 
+- Pick other size of window and do the whole thing again.
+- give to the CNN the windows to see if its detect a car.
+- store the windows that contains cars
+- If two or more rectangles intersects choose the rectangle with the best accuracy.
+
+Disadvantage of sliding window is the computation time.
+In the era of machine learning before deep learning, people used a hand crafted linear classifiers that classifies the object and then use the sliding window technique. The linear classier make it a cheap computation. But in the deep learning era that is so computational expensive due to the complexity of the deep learning model.
+To solve this problem, we can implement the sliding windows with a Convolutional approach.  One other idea is to compress your deep learning model.
+
+
+### Convolutional Implementation of Sliding Windows
+
+To solve the computation time problem of the sliding window, we can implement the it with a Convolutional approach.
+
+So the first thing to do is turning FC layers into Conv layers using a convolution :
+![](https://i.ibb.co/yR9DmSp/image.png)
+
+The conv implementation is very simple :
+
+![](https://i.ibb.co/vD7vQrS/image.png)
+First lets consider that the Conv net you trained is like the first row NN (No FC all is conv layers).
+
+Say now we have a 16 x 16 x 3 image that we need to apply the sliding windows in. By the normal implementation that have been mentioned in the section before this, we would run this Conv net four times each rectangle size will be 16 x 16.
+
+The convolution implementation will be as follows:
+- Simply we have feed the image into the same Conv net we have trained.
+- The left cell of the result "The blue one" will represent the the first sliding window of the normal implementation.
+- The other cells will represent the others.
+- Its more efficient because it now shares the computations of the four times needed.
+
+The last example (last row)  has a total of 16 sliding windows that shares the computation together.
+
+The weakness of the algorithm is that the position of the rectangle wont be so accurate. Maybe none of the rectangles is exactly on the object you want to recognize.
+
+### Bounding Box Predictions
+
+We know the weakness of the sliding windows: the bounding box are not very accurate because when we sliding the windows there are chances none of the boxes really match up perfectly with the position of the car. The best match would probably be one that we draw.
+
+How to get our bounding box prediction more accurate?
+
+For that, let use the YOLO algorithm. Its stands for **you only look once** and was developed back in 2015.
+
+Here the steps of the Yolo Algorithm:
+-  Lets say we have an image of 100 X 100
+-  Place a 3 x 3 grid on the image. For more smother results you should use 19 x 19 for the 100 x 100
+- Apply the classification and localization algorithm we discussed in a previous section to each section of the grid. bx and by will represent the center point of the object in each grid and will be relative to the box so the range is between 0 and 1 while bh and bw will represent the height and width of the object which can be greater than 1.0 but still a floating point value.
+-  Do everything at once with the convolution sliding window. If Y shape is 1 x 8 as we discussed before then the output of the 100 x 100 image should be 3 x 3 x 8 which corresponds to 9 cell results.
+-  Merging the results using predicted localization mid point.
+
+Note that we will have a problem if we have found more than one object in one grid box.
+
+- One of the best advantages that makes the YOLO algorithm popular is that it has a great speed and a Conv net implementation.
+How is YOLO different from other Object detectors? YOLO uses a single CNN network for both classification and localizing the object using bounding boxes.
+
+In the next sections we will see some ideas that can make the YOLO algorithm better.
+
+### Intersection Over Union
+
+How do you tell if your object detection algorithm is working well? 
+
+**Intersection Over Union** is a function used to evaluate the object detection algorithm.
+
+![](https://i.ibb.co/CvX3XcK/image.png)
+The algorithm computes size of intersection and divide it by the union. More generally, IoU is a measure of the overlap between two bounding boxes.
+
+In the previous example, the red is the labeled output and the purple is the predicted output. Let's compute the IoU, if the IoU is >= to 0.5 (human convention) then we can say that our prediction is correct. 
+
+Of course, if the IoU is equal to 1, then that means that the two bounding box are overleaping. So the higher the IoU, the better is the accuracy.
+
+### Non-max Suppression
+
+One of the problems of Object Detection as you've learned about this so far, is that your algorithm may find multiple detections of the same objects. Rather than detecting an object just once, it might detect it multiple times.
+
+Non-max suppression is a way for you to make sure that your algorithm detects each object only once.
+
+For example, the car detection :
+
+![](https://i.ibb.co/xm3hSLN/image.png)
+
+Because we're running the image classification and localization algorithm on every grid cell ( 19 x 19 = 361 grid cells) it's possible that many of them detect an object. So, when you run your algorithm, you might end up with multiple detections of each object.
+
+What non-max suppression does is it cleans up these detections so they end up with just one detection per car rather than multiple detections per car.
+
+non-max means that you're going to output your maximal probabilities classifications (Pc) but suppress the close ones that are non-maximal. Hence the name, non-max suppression.
+
+Here the algorithm steps:
+
+Lets assume that we are targeting one class as an output class.
+- Y shape should be [Pc, bx, by, bh, hw] Where Pc is the probability if that object occurs.
+-  Discard all boxes with Pc < 0.6
+-  While there are any remaining boxes:
+	-  Pick the box with the largest Pc Output that as a prediction.
+	-  Discard any remaining box with IoU > 0.5 with that box output in the previous step i.e any box with high overlap(greater than overlap threshold of 0.5).
+
+If there are multiple classes/object types c you want to detect, you should run the Non-max suppression c times, once for every output class.
+
+### Anchor Boxes
+
+One of the problems with object detection as we have seen it so far is that each of the grid cells can detect only one object. What if a grid cell wants to detect multiple objects?
+
+You can use the idea of anchor boxes. Let's start with an example.
+
+Say we have a pedestrian and a car in the same gird (even if it's happens rarely) like in this image:
+
+If Y = [Pc, bx, by, bh, bw, c1, c2, c3] Then to use two anchor boxes like this: Y = [Pc, bx, by, bh, bw, c1, c2, c3, Pc, bx, by, bh, bw, c1, c2, c3] We simply have repeated the one anchor
+Y.
+
+We will chose two anchor box shaped as the shape of our object.
+
+![](https://i.ibb.co/vXtWX4r/image.png)
+So Previously, each object in training image is assigned to grid cell that contains that object's midpoint. With two anchor boxes, Each object in training image is assigned to grid cell that contains object's midpoint and anchor box for the grid cell with highest IoU. You have to check where your object should be based on its rectangle closest to which anchor box.
+
+You may have two or more anchor boxes but you should know their shapes. how do you choose the anchor boxes and people used to just choose them by hand. Maybe five or ten anchor box shapes that spans a variety of shapes that cover the types of objects you seem to detect frequently.
+You may also use a k-means algorithm on your dataset to specify that.
+Anchor boxes allows your algorithm to specialize, means in our case to easily detect wider images or taller ones.
+
+### YOLO Algorithm
+
+Let's put all the pieces together to form the YOLO algorithm - a state-of-the-art object detection model that is fast and accurate.
+
+Suppose we need to do object detection for our autonomous driver system.It needs to identify three classes:
+
+	i. Pedestrian (Walks on ground).
+	ii. Car.
+	iii. Motorcycle.
+	
+We decided to choose two anchor boxes, a taller one and a wide one.
+
+Like we said in practice they use five or more anchor boxes hand made or generated using k-means.
+
+Our labeled Y shape will be [Ny, HeightOfGrid, WidthOfGrid, 16] , where Ny is number of instances and each row (of size 16) is as follows: [Pc, bx, by, bh, bw, c1, c2, c3, Pc, bx, by, bh, bw, c1, c2, c3]
+
+Your dataset could be an image with a multiple labels and a rectangle for each label, we should go to your dataset and make the shape and values of Y like we agreed.
+
+![](https://i.ibb.co/5FbvnFB/image.png)
+We first initialize all of them to zeros and ?, then for each label and rectangle choose its closest grid point then the shape to fill it and then the best anchor point based on the IOU. so that the shape of Y for one image should be [HeightOfGrid, WidthOfGrid,16]
+
+Train the labeled images on a Conv net. you should receive an output of [HeightOfGrid, WidthOfGrid,16] for our case.
+
+To make predictions, run the Conv net on an image and run Non-max suppression algorithm for each class you have in our case there are 3 classes.
+
+![](https://i.ibb.co/BgqKTrz/image.png)
+
+When running the Non-max suppression, in the first step we might have a lot of bounding box, by removing the low probability predictions you should have less boxes. Finally we get the best bounding boxes by applying the IoU filter. 
+
+Note that YOLO is not good at detecting smaller object.
+
+You can find implementations for YOLO here:
+
+https://github.com/allanzelener/YAD2K
+https://github.com/thtrieu/darkflow
+https://pjreddie.com/darknet/yolo/
+
+
+### Region Proposals (R-CNN)
+
+R-CNN is an algorithm that also makes an object detection. Yolo tells that its faster:
+
+> Our model has several advantages over classifier-based systems. It
+> looks at the whole image at test time so its predictions are informed
+> by global context in the image. It also makes predictions with a
+> single network evaluation unlike systems like R-CNN which require
+> thousands for a single image. This makes it extremely fast, more than
+> 1000x faster than R-CNN and 100x faster than Fast R-CNN. See our paper
+> for more details on the full system.
+
+But one of the downsides of YOLO that it process a lot of areas where no objects are present.
+- R-CNN stands for regions with Conv Nets.
+- R-CNN tries to pick a few windows and run a Conv net (your confident classifier) on top of them.
+- The algorithm R-CNN uses to pick windows is called a segmentation algorithm. Outputs something like this:
+
+![](https://i.ibb.co/fp0zcYR/image.png)
+
+If for example the segmentation algorithm produces 2000 blob then we should run our classifier/CNN on top of these blobs.
+
+There has been a lot of work regarding R-CNN tries to make it faster:
+- R-CNN:
+Propose regions. Classify proposed regions one at a time. Output label + bounding box.
+Downside is that its slow.
+
+- Fast R-CNN:
+Propose regions. Use convolution implementation of sliding windows to classify all the proposed regions.
+
+- Faster R-CNN:
+Use convolutional network to propose regions.
+
+- Mask R-CNN:
+Most of the implementation of faster R-CNN are still slower than YOLO.
+Andrew Ng thinks that the idea behind YOLO is better than R-CNN because you are able to do all the things in just one time instead of two times.
+
+Other algorithms that uses one shot to get the output includes SSD and MultiBox.
+R-FCN is similar to Faster R-CNN but more efficient.
+
+#### What you should remember:[](https://godrdpxw.labs.coursera.org/notebooks/week3/Car%20detection%20for%20Autonomous%20Driving/Autonomous_driving_application_Car_detection_v3a.ipynb#What-you-should-remember:)
+
+-   YOLO is a state-of-the-art object detection model that is fast and accurate
+-   It runs an input image through a CNN which outputs a 19x19x5x85 dimensional volume.
+-   The encoding can be seen as a grid where each of the 19x19 cells contains information about 5 boxes.
+-   You filter through all the boxes using non-max suppression. Specifically:
+    -   Score thresholding on the probability of detecting a class to keep only accurate (high probability) boxes
+    -   Intersection over Union (IoU) thresholding to eliminate overlapping boxes
+-   Because training a YOLO model from randomly initialized weights is non-trivial and requires a large dataset as well as lot of computation, we used previously trained model parameters in this exercise. If you wish, you can also try fine-tuning the YOLO model with your own dataset, though this would be a fairly non-trivial exercise.
+
+## Special applications: Face recognition & Neural style transfer
+
+By now, we've learned a lot about ConvNet. This week, we will see important special applications of ConvNet.
+We'll start the face recognition, and then go on later this week to Neural Style transfer, which you get to implement in the problem exercise as well to create your own artwork
+
+### Face Recognition
+
+#### What is Face recognition
+
+Face recognition system identifies a person's face. It can work on both images or videos.
+What Andrew show us in his example is a face recognition + liveness detection : its prevents the network from identifying a face in an image when it's not a real person. It can be learned by supervised deep learning.
+
+Face verification vs. face recognition:
+- Verification:
+	- Input: image, name/ID. (1 : 1)
+	- Output: whether the input image is that of the claimed person.
+	- "is this the claimed person?"
+- Recognition (more complex):
+	- Has a database of K persons
+	- Get an input image
+	- Output ID if the image is any of the K persons (or not recognized)
+	- "who is this person?"
+
+We can use a face verification system to make a face recognition system. The accuracy of the verification system has to be high (around 99.9% or more) to be use accurately within a recognition system because the recognition system accuracy will be less than the verification system given K persons.
+
+#### One shot Learning
+
+One of the challenges of face recognition is that you need to solve the one-shot learning problem. What that means is that for most face recognition applications you need to be able to recognize a person given just one single image, or given just one example of that person's face. And, historically, deep learning algorithms don't work well if you have only one training example. Let's see an example of what this means and talk about how to address this problem.
+
+One Shot Learning: A recognition system is able to recognize a person, learning from one image.
+
+Say you have one image of every of your employee/colleague, your system have to check is a person is one of your employee/colleague or none of them.  What we can do is training a ConvNet with a softmax output of (#employee/colleague + 1)  (the +1 is for none of the classes) layer, but knowing that we only have one image of each, we know that this not going to work correctly.
+
+So what we are going to do instead is learning a **similarity function** and in particular :
+
+    d( img1, img2 ) = degree of difference between images.
+
+We want d result to be low in case of the same faces and high if the two face are different.
+
+We will use (tau) T as a threshold for d (so T will be a hyperparameters):
+
+    If d( img1, img2 ) <= T Then the faces are the same.
+
+The plus of this method is that if we have a new person in our team, then we don't have to re-train the whole model. Instead, we just need to add that person image to our data set, and the whole system will work find. So the solution to One shot learning problem is solved by the similarity function.
+
+
+#### Siamese Network
+
+We will implement the similarity function using a type of NNs called Siamease Network in which we can pass multiple inputs to the two or more networks with the same architecture and parameters.
+Siamese network architecture are as the following:
+
+![](https://i.ibb.co/SxdS5ZR/image.png)
+
+
+The loss function will be `d(x1, x2) = || f(x1) - f(x2) ||^2`
+If X1 , X2 are the same person, we want d to be low. If they are different persons, we want d to be high.
+
+#### Triplet Loss
+
+One way to learn the parameters of the neural network so that it gives you a good encoding for your pictures of faces is to define an applied gradient descent on the triplet loss function. Let's see what that means.
+
+Triplet Loss is one of the loss functions we can use to solve the similarity distance in a Siamese network. Our learning objective in the triplet loss function is to get the distance between an Anchor image and a positive or a negative image. (Positive means same person, while negative means different person.)
+
+Note that the triplet name came from that we are comparing an anchor A with a positive P and a negative N image.
+
+![](https://i.ibb.co/8Xkh810/image.png)
+
+Formally we want that the positive distance to be less than negative distance. To make sure the NN won't get an output of zeros easily we add an alpha margin (a small function).
+
+The final Loss function given 3 images (A, P, N), would be :
+
+![](https://i.ibb.co/zh3qXcw/image.png)
+
+You need multiple images of the same person in your dataset. Then get some triplets out of your dataset. Dataset should be big enough.
+
+Choosing the triplets A, P, N:
+- During training if A, P, N are chosen randomly (Subjet to A and P are the same and A and N aren't the same) the one of the problems this constrain is easily satisfied `d(A, P) + alpha <= d (A, N)` So the NN wont learn much.
+
+- What we want to do is choose triplets that are hard to train on. So for all the triplets we want this to be satisfied:
+
+    d(A, P) + alpha <= d (A, N)
+
+Note that commercial recognition systems are trained on a large datasets like 10/100 million images. There are a lot of pretrained models and parameters online for face recognition. The best to do if we have an application of face recognition to build is to get the weight of these systems.
+
+### Face Verification and Binary Classification
+
+The Triplet Loss is one good way to learn the parameters of a continent for face recognition. There's another way to learn these parameters. Let see how face recognition can also be posed as a straight binary classification problem.
+
+So to learn the parameters another way, we can :
+
+![](https://i.ibb.co/QkqxgQs/image.png)
+
+The final layer can be a sigmoid function for example :
+
+    Y' = wi * Sigmoid ( f(x(i)) - f(x(j)) ) + b
+
+ where the subtraction is the Manhattan distance between f(x(i)) and f(x(j))
+Some other similarities can be Euclidean and Ki square similarity.
+
+The NN here is Siamese means the top and bottom convs has the same parameters.
+
+A good performance/deployment trick:
+- Pre-compute all the images that you are using as a comparison to the vector f(x(j))
+- When a new image that needs to be compared, get its vector f(x(i)) then put it with all the pre computed vectors and pass it to the sigmoid function.
+- This version works quite as well as the triplet loss function.
+
+
+Available implementations for face recognition using deep learning includes:
+- Openface
+- FaceNet
+- DeepFace
+
+### Neural style transfer
+
+#### What is neural style transfer?
+
+This is one of the more exciting application of ConvNet.
+
+Neural style transfer takes a content image C and a style image S and generates the content image G with the style of style image.
+
+![](https://i.ibb.co/hFmS9J1/image.png)
+In order to implement Neural Style Transfer, we need to look at the features extracted by ConvNet at various layers : the shallow and the deeper layers of a ConvNet.
+
+Before diving into how we can implement a Neural Style Transfer, we will try to have a better intuition about whether all these layers of a ConvNet really computing.
+
+#### What are deep ConvNets learning?
+
+What are deep ConvNets really learning?
+
+We will see some visualizations that will help us with our intuition about what the deeper layers of a ConvNet really are doing.
+
+And this will help us think through how you to implement neural style transfer as well.
+
+
+As this part was a little bit confusing for me, let first clarify some things.
+
+A hidden unit in a Conv layer is (from what I understand) is a pixel of the matrix  (channel stacked) resulting from a conv operation + b that we applied the ReLu activation function. To write it more clearly :
+
+**In a ConvNet, a given unit in a hidden layer is the output of the application of the filter at a particular point in the input space.**
+
+From [here](https://stats.stackexchange.com/questions/333099/definition-of-hidden-unit-in-a-convnet) , we can note that A hidden unit, in general, has an operation **Activation(W*X+b)**. Note that when implementing the CONV layer in keras or  tensorflow we use :
+```
+tf.nn.Conv2D(**hidden_units**,...)
+```
+Here it's the filter shape we use.
+
+To summarize this part: 
+
+The number of filters in one layer is the number of neurons in that layer. The number of filters is also the number of channels for the output of that layer, and one pixel in the output (in one channel) is the output of a neuron.
+
+Also note that from a mentor in Coursera classes :  A patch is a part of the image that is covered by the filter.
+
+Knowing all that, let's continue with an example:
+
+We want to visualize what the hidden units in different layers are computing. That what we can do :
+
+![](https://i.ibb.co/Cm2bFq9/image.png)
+
+- Pick a unit in layer l. Find the nine image patches that maximize the unit's activation. So in other words pass your training set through your neural network, and figure out what is the image that maximizes that particular unit's activation.
+Notice that a hidden unit in layer one will see relatively small portion of NN, so if you plotted it it will match a small image in the shallower layers while it will get larger image in deeper layers.
+- Repeat for other units and layers.
+- It turns out that layer 1 are learning the low level representations like colors and edges.
+
+Note : what we did, is just taking the result of the first conv layers, of one channel (so the result of one filter) we looked at n patches (the part of the image that was convolved with the filter) where the activation function was the max.
+
+In the deeper layers, a hidden unit will see a larger region of the image. Where at the extreme end each pixel could hypothetically affect the output of these later layers of the neural network. So later units are actually seen larger image patches.
+
+
+![](https://i.ibb.co/nCxL2tZ/image.png)
+- The first layer was created using the weights of the first layer. Other images are generated using the receptive field in the image that triggered the neuron to be max.
+
+Mahmoud Badry notes suggests this [link](https://medium.com/mlreview/a-guide-to-receptive-field-arithmetic-for-convolutional-neural-networks-e0f514068807) 
+
+#### Cost Function
+
+To build a Neural Style Transfer system, let's define a cost function for the generated image.
+
+Remember the problem : Give a content image C, a style image S, and a generated image G.
+
+What we're going to do is define a cost function J(G) that measures how good is a particular generated image and we'll use gradient to descent to minimize J(G) in order to generate this image :
+
+    J(G) = alpha * J(C,G) + beta * J(S,G)
+
+- J(C, G) measures how similar is the generated image to the Content image.
+- J(S, G) measures how similar is the generated image to the Style image.
+- alpha and beta are relative weighting to the similarity and these are hyperparameters. We use the same convention as the author of the paper.
+
+The way the algorithm would run is as follows : having to find the cost function J(G) in order to actually generate a new image what you do is the following:
+
+- initialize the generated image G randomly. (For example G: 100 X 100 X 3)
+- Use gradient descent to minimize J(G)
+`G = G - dG` We compute the gradient image and use gradient decent to minimize the cost function. This will update the values of the images G.
+
+Here an example :
+
+![](https://i.ibb.co/rsXjLFh/image.png)
+
+#### Content Cost Function
+
+The cost function of the neural style transfer algorithm had a content cost component and a style cost component. Let's start by defining the content cost component.
+
+![](https://i.ibb.co/MM9j1c7/image.png)
+
+If we choose l to be small (like layer 1), we will force the network to get similar output to the original content
+image. In practice l is not too shallow and not too deep but in the middle.
+
+So, what we'll do is define J_content(C,G) as just how different are these two activations. So, we'll take the element-wise difference between these hidden unit activations in layer l, between when you pass in the content image compared to when you pass in the generated image, and take that squared.
+
+#### Style Cost Function
+
+Meaning of the style of an image:
+- Say you are using layer l's activation to measure style.
+Define style as correlation between activations across channels.
+That means given an activation like this:
+
+![](https://i.ibb.co/fQNTh5Y/image.png)
+
+How correlate is the orange channel with the yellow channel?
+
+- Correlated means if a value appeared in a specific channel a specific value will appear too (Depends on each
+other).
+- Uncorrelated means if a value appeared in a specific channel doesn't mean that another value will appear (Not
+depend on each other)
+
+- The correlation tells you how a components might occur or not occur together in the same image.
+- The correlation of style image channels should appear in the generated image channels.
+
+Style matrix (Gram matrix):
+
+- Let a(l)[i, j, k] be the activation at l with (i=H, j=W, k=C) Also G(l)(s) is matrix of shape nc(l) x nc(l)
+- We call this matrix style matrix or Gram matrix.
+- In this matrix each cell will tell us how correlated is a channel to another channel.
+-To populate the matrix we use these equations to compute style matrix of the style image and the generated image.
+
+![](https://i.ibb.co/Krrqv8D/image.png)
+- As it appears its the sum of the multiplication of each member in the matrix.
+To compute gram matrix efficiently:
+- Reshape activation from H X W X C to HW X C
+ - Name the reshaped activation F.
+
+    G[l] = F * F.T
+
+Finally the cost function will be as following:
+
+    J(S, G) at layer l = (1/ 2 * H * W * C) || G(l)(s) - G(l)(G) ||
+
+And if you have used it from some layers
+
+    J(S, G) = Sum (lamda[l]*J(S, G)[l], for all layers)
+
+To summarize
+
+Steps to be made if you want to create a tensorflow model for neural style transfer:
+i. Create an Interactive Session.
+ii. Load the content image.
+iii. Load the style image
+iv. Randomly initialize the image to be generated
+v. Load the VGG16 model
+vi. Build the TensorFlow graph:
+	- Run the content image through the VGG16 model and compute the content cost
+	- Run the style image through the VGG16 model and compute the style cost
+	- Compute the total cost
+	- Define the optimizer and the learning rate
+vii. Initialize the TensorFlow graph and run it for a large number of iterations, updating the generated image at every step.
+
+#### 1D and 3D Generalizations
+
+So far we have used the Conv nets for images which are 2D.
+
+Conv nets can work with 1D and 3D data as well.
+
+An example of 1D convolution:
+- Input shape (14, 1)
+- Applying 16 filters with F = 5 , S = 1
+- Output shape will be 10 X 16
+- Applying 32 filters with F = 5, S = 1
+- Output shape will be 6 X 32
+
+The general equation (N - F)/S + 1 can be applied here but here it gives a vector rather than a 2D matrix.
+
+1D data comes from a lot of resources such as waves, sounds, heartbeat signals.
+
+In most of the applications that uses 1D data we use Recurrent Neural Network RNN.
+
+3D data also are available in some applications like CT scan.
+Example of 3D convolution:
+- Input shape (14, 14,14, 1)
+- Applying 16 filters with F = 5 , S = 1
+- Output shape (10, 10, 10, 16)
+- Applying 32 filters with F = 5, S = 1
+- Output shape will be (6, 6, 6, 32)
+
+
+Notebook notes
+
+Face recognition problems commonly fall into two categories:
+
+-   **Face Verification** - "is this the claimed person?". For example, at some airports, you can pass through customs by letting a system scan your passport and then verifying that you (the person carrying the passport) are the correct person. A mobile phone that unlocks using your face is also using face verification. This is a 1:1 matching problem.
+-   **Face Recognition** - "who is this person?". For example, the video lecture showed a [face recognition video](https://www.youtube.com/watch?v=wr4rx0Spihs) of Baidu employees entering the office without needing to otherwise identify themselves. This is a 1:K matching problem.
+
+FaceNet learns a neural network that encodes a face image into a vector of 128 numbers. By comparing two such vectors, you can then determine if two pictures are of the same person.
+
